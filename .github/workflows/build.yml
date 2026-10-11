@@ -5,14 +5,18 @@ on:
   push:
     tags-ignore:
       - '**'
-  release:
-    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag name to release (e.g. v0.8.2)'
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}-${{ github.event.inputs.tag }}
   cancel-in-progress: true
 
 jobs:
@@ -63,8 +67,13 @@ jobs:
       - name: Ensure Cargo.lock is not modified
         run: git diff --exit-code Cargo.lock
 
+  # How to release: Actions tab -> ci -> "Run workflow" -> enter tag.
+  # softprops/action-gh-release creates the tag + release itself (authored by
+  # github-actions), the first matrix job to finish creates it and the rest
+  # just attach their assets. Never create the release manually.
   build-release:
     name: Build release executable (${{ matrix.target }})
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
@@ -84,6 +93,8 @@ jobs:
             target: aarch64-apple-darwin
           - os: windows-latest
             target: x86_64-pc-windows-msvc
+          - os: windows-latest
+            target: i686-pc-windows-msvc
     env:
       BINARY_NAME: simple-http-server${{ endsWith(matrix.target, '-msvc') && '.exe' || '' }}
     steps:
@@ -110,27 +121,19 @@ jobs:
       - if: runner.os != 'Linux'
         name: Build release binary
         run: cargo build --release --no-default-features --bin simple-http-server --locked --target=${{ matrix.target }}
-      - name: Evaluate sha256
+      # Unique asset name per target (a shared name would overwrite across
+      # jobs). No .sha256 files: GitHub already shows a SHA256 per asset.
+      - name: Prepare release asset
         shell: bash
         run: |
           BIN="target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}"
           test -f "$BIN"
-          python3 -c "import hashlib; print(hashlib.sha256(open('$BIN','rb').read()).hexdigest(), end='')" > "$BIN.sha256"
-          cat "$BIN.sha256"
-      - uses: actions/upload-artifact@v6
-        with:
-          name: ${{ matrix.target }}-${{ env.BINARY_NAME }}
-          path: target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v6
-        with:
-          name: ${{ matrix.target }}-${{ env.BINARY_NAME }}.sha256
-          path: target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}.sha256
-          if-no-files-found: error
+          mkdir -p dist
+          cp "$BIN" "dist/simple-http-server-${{ matrix.target }}${{ endsWith(matrix.target, '-msvc') && '.exe' || '' }}"
       - name: Publish release artifacts
-        if: github.event_name == 'release'
         uses: softprops/action-gh-release@v3
         with:
-          files: |
-            target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}
-            target/${{ matrix.target }}/release/${{ env.BINARY_NAME }}.sha256
+          tag_name: ${{ inputs.tag }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: false
+          files: dist/*

@@ -318,6 +318,99 @@ mod tests {
     }
 
     #[test]
+    fn serves_try_file_for_existing_directory_when_listing_disabled() {
+        run_async_test(async {
+            let root = make_temp_dir();
+            fs::create_dir_all(root.join("settings")).unwrap();
+            let try_file = root.join("index.html");
+            fs::write(&try_file, "spa shell").unwrap();
+
+            let mut config = test_config(root.clone());
+            config.dir_listing = false;
+            config.try_file_404 = Some(try_file);
+
+            let response = send(
+                test_app(config),
+                Request::builder()
+                    .uri("/settings")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await;
+
+            assert_eq!(response.status(), StatusCode::NOT_FOUND);
+            assert_eq!(response_text(response).await, "spa shell");
+
+            fs::remove_dir_all(root).unwrap();
+        });
+    }
+
+    #[test]
+    fn serves_directory_index_when_listing_disabled_and_index_enabled() {
+        run_async_test(async {
+            let root = make_temp_dir();
+            fs::create_dir_all(root.join("settings")).unwrap();
+            fs::write(root.join("settings/index.html"), "settings page").unwrap();
+            fs::write(root.join("index.html"), "spa shell").unwrap();
+
+            let mut config = test_config(root.clone());
+            config.dir_listing = false;
+            config.index = true;
+            config.try_file_404 = Some(root.join("index.html"));
+
+            let response = send(
+                test_app(config.clone()),
+                Request::builder()
+                    .uri("/settings/")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await;
+            assert_eq!(response.status(), StatusCode::OK);
+            assert_eq!(response_text(response).await, "settings page");
+
+            let response = send(
+                test_app(config),
+                Request::builder().uri("/").body(Body::empty()).unwrap(),
+            )
+            .await;
+            assert_eq!(response.status(), StatusCode::OK);
+            assert_eq!(response_text(response).await, "spa shell");
+
+            fs::remove_dir_all(root).unwrap();
+        });
+    }
+
+    #[test]
+    fn rejects_directory_when_listing_disabled_without_fallback() {
+        run_async_test(async {
+            let root = make_temp_dir();
+            fs::create_dir_all(root.join("settings")).unwrap();
+
+            let mut config = test_config(root.clone());
+            config.dir_listing = false;
+
+            let response = send(
+                test_app(config),
+                Request::builder()
+                    .uri("/settings")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await;
+
+            assert_eq!(response.status(), StatusCode::FORBIDDEN);
+            assert!(
+                response_text(response)
+                    .await
+                    .contains("Directory listing is disabled")
+            );
+
+            fs::remove_dir_all(root).unwrap();
+        });
+    }
+
+    #[test]
     fn enforces_basic_auth() {
         run_async_test(async {
             let root = make_temp_dir();
@@ -769,6 +862,7 @@ mod tests {
         Config {
             root,
             index: false,
+            dir_listing: true,
             upload: None,
             redirect_to: None,
             sort: true,

@@ -15,6 +15,7 @@ use crate::util::{generate_csrf_token, now_string, resolve_relative_path};
 pub(crate) struct Config {
     pub(crate) root: PathBuf,
     pub(crate) index: bool,
+    pub(crate) dir_listing: bool,
     pub(crate) upload: Option<UploadConfig>,
     pub(crate) redirect_to: Option<String>,
     pub(crate) sort: bool,
@@ -92,6 +93,12 @@ pub(crate) fn build_cli() -> Command {
                 .long("nosort")
                 .action(ArgAction::SetTrue)
                 .help("Disable directory entries sort (by: name, modified, size)"),
+        )
+        .arg(
+            Arg::new("no-dir-listing")
+                .long("no-dir-listing")
+                .action(ArgAction::SetTrue)
+                .help("Disable directory listing. Directory paths fall back to the index page (with --index) or to --try-file"),
         )
         .arg(
             Arg::new("nocache")
@@ -271,6 +278,7 @@ pub(crate) fn build_config(matches: clap::ArgMatches) -> Result<Config, String> 
     Ok(Config {
         root,
         index: matches.get_flag("index"),
+        dir_listing: !matches.get_flag("no-dir-listing"),
         upload,
         redirect_to: matches.get_one::<String>("redirect").cloned(),
         sort: !matches.get_flag("nosort"),
@@ -334,8 +342,9 @@ pub(crate) fn print_startup(config: &Config) {
     };
 
     println!(
-        "     Index: {}, Cache: {}, Cors: {}, Coop: {}, Coep: {}, Range: {}, Sort: {}, Threads: {}\n      Upload: {}, CSRF Token: {}\n        Auth: {}\n Compression: {}\n       HTTPS: {}, Cert: {}, Cert-Password: {}\n        Root: {}\n     BaseURL: {}\n  TryFile404: {}\n     Address: {}\n========== [{}] ==========",
+        "     Index: {}, DirListing: {}, Cache: {}, Cors: {}, Coop: {}, Coep: {}, Range: {}, Sort: {}, Threads: {}\n      Upload: {}, CSRF Token: {}\n        Auth: {}\n Compression: {}\n       HTTPS: {}, Cert: {}, Cert-Password: {}\n        Root: {}\n     BaseURL: {}\n  TryFile404: {}\n     Address: {}\n========== [{}] ==========",
         enable_string(config.index),
+        enable_string(config.dir_listing),
         enable_string(config.cache),
         enable_string(config.cors),
         enable_string(config.coop),
@@ -650,6 +659,7 @@ mod tests {
         Config {
             root: PathBuf::from("."),
             index: false,
+            dir_listing: true,
             upload: None,
             redirect_to: None,
             sort: true,

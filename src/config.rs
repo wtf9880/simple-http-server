@@ -342,8 +342,9 @@ pub(crate) fn print_startup(config: &Config) {
     };
 
     println!(
-        "     Index: {}, Cache: {}, Cors: {}, Coop: {}, Coep: {}, Range: {}, Sort: {}, Threads: {}\n      Upload: {}, CSRF Token: {}\n        Auth: {}\n Compression: {}\n       HTTPS: {}, Cert: {}, Cert-Password: {}\n        Root: {}\n     BaseURL: {}\n  TryFile404: {}\n     Address: {}\n========== [{}] ==========",
+        "     Index: {}, DirListing: {}, Cache: {}, Cors: {}, Coop: {}, Coep: {}, Range: {}, Sort: {}, Threads: {}\n      Upload: {}, CSRF Token: {}\n        Auth: {}\n Compression: {}\n       HTTPS: {}, Cert: {}, Cert-Password: {}\n        Root: {}\n     BaseURL: {}\n  TryFile404: {}\n     Address: {}\n========== [{}] ==========",
         enable_string(config.index),
+        enable_string(config.dir_listing),
         enable_string(config.cache),
         enable_string(config.cors),
         enable_string(config.coop),

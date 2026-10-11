@@ -36,6 +36,7 @@ Options:
       --csrf <TOKEN>              Use a custom CSRF token for upload. WARNING: this is dangerous as the token is passed via the command line and may be visible in process listings
       --redirect <URL>            takes a URL to redirect to using HTTP 301 Moved Permanently
       --nosort                    Disable directory entries sort (by: name, modified, size)
+      --no-dir-listing            Disable directory listing. Directory paths fall back to the index page (with --index) or to --try-file
       --nocache                   Disable http cache
       --norange                   Disable header::Range support (partial request)
       --cert <FILE>               TLS/SSL certificate (pkcs#12 format, requires tls feature)
@@ -77,6 +78,12 @@ Serve an SPA fallback file:
 
 ```sh
 simple-http-server --try-file dist/index.html dist
+```
+
+Serve an SPA where client-side routes collide with real directories (e.g. `dist/settings/` exists but `/settings` is an app route):
+
+```sh
+simple-http-server --no-dir-listing --try-file dist/index.html dist
 ```
 
 Run behind a reverse proxy that strips `/static/` before forwarding:
@@ -152,5 +159,5 @@ curl -kI https://localhost:8443/
 - Single-range partial content support
 - `gzip` / `deflate` compression
 - CORS plus `COOP` / `COEP` headers
-- SPA fallback via `--try-file`
+- SPA fallback via `--try-file`, including paths that match existing directories with `--no-dir-listing`
 - Optional PKCS#12 HTTPS via the `tls` feature

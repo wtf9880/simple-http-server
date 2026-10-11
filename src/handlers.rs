@@ -299,17 +299,8 @@ async fn handle_request_inner(config: Arc<Config>, req: Request) -> Result<Respo
         Ok(metadata) => metadata,
         Err(err) => match err.kind() {
             io::ErrorKind::NotFound => {
-                if let Some(path) = &config.try_file_404
-                    && matches!(fs::metadata(path), Ok(metadata) if metadata.is_file())
-                {
-                    return send_file(
-                        config.as_ref(),
-                        &request_meta,
-                        path,
-                        Some(StatusCode::NOT_FOUND),
-                        request_meta.method == Method::HEAD,
-                    )
-                    .await;
+                if let Some(result) = serve_try_file(config.as_ref(), &request_meta).await {
+                    return result;
                 }
                 return Err(AppError::from_io(err));
             }
@@ -318,6 +309,33 @@ async fn handle_request_inner(config: Arc<Config>, req: Request) -> Result<Respo
     };
 
     if metadata.is_dir() {
+        if !config.dir_listing {
+            if config.index {
+                for filename in ["index.html", "index.htm"] {
+                    let index_path = fs_path.join(filename);
+                    if matches!(fs::metadata(&index_path), Ok(metadata) if metadata.is_file()) {
+                        return send_file(
+                            config.as_ref(),
+                            &request_meta,
+                            &index_path,
+                            None,
+                            request_meta.method == Method::HEAD,
+                        )
+                        .await;
+                    }
+                }
+            }
+
+            if let Some(result) = serve_try_file(config.as_ref(), &request_meta).await {
+                return result;
+            }
+
+            return Err(AppError::new(
+                StatusCode::FORBIDDEN,
+                "Directory listing is disabled",
+            ));
+        }
+
         let directory_query = Query::<DirectoryQuery>::try_from_uri(req.uri())
             .map_err(|err| AppError::new(StatusCode::BAD_REQUEST, err.body_text()))?;
         list_directory(
@@ -846,6 +864,26 @@ async fn list_directory(
 /// `image/svg+xml` or `application/xhtml+xml`.
 fn is_xml_based(mime: &mime_guess::Mime) -> bool {
     mime.subtype() == mime_guess::mime::XML || mime.suffix() == Some(mime_guess::mime::XML)
+}
+
+async fn serve_try_file(
+    config: &Config,
+    request: &RequestMeta,
+) -> Option<Result<Response, AppError>> {
+    let path = config.try_file_404.as_ref()?;
+    match fs::metadata(path) {
+        Ok(metadata) if metadata.is_file() => Some(
+            send_file(
+                config,
+                request,
+                path,
+                Some(StatusCode::NOT_FOUND),
+                request.method == Method::HEAD,
+            )
+            .await,
+        ),
+        _ => None,
+    }
 }
 
 async fn send_file(

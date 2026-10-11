@@ -2,11 +2,11 @@ fmt:
 	cargo fmt --all -- --check
 
 clippy:
-	cargo clippy --all --tests --all-features -- -D warnings
+	cargo clippy --workspace --all-targets --all-features -- -D warnings
 
 test: export RUST_BACKTRACE := full
 test:
-	RUSTFLAGS='-D warnings' cargo test --all --all-features
+	RUSTFLAGS='-D warnings' cargo test --workspace --all-features
 
 ci: fmt clippy test
 	git diff --exit-code Cargo.lock
